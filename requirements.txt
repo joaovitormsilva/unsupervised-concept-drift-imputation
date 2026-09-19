@@ -1,0 +1,9 @@
+river
+spotriver
+pandas
+numpy
+scikit-learn
+matplotlib
+seaborn
+tqdm
+psutil

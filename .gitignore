@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.venv/
+venv/
+
+# dados brutos e simulados (grandes, não versionar)
+data/raw/*
+!data/raw/.gitkeep
+
+# resultados intermediários de experimentos
+Detection/Parameters/*/*.csv
+Detection/Parameters/*/*.png
