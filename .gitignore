@@ -4,9 +4,11 @@ __pycache__/
 .venv/
 venv/
 
-# dados brutos e simulados (grandes, não versionar)
+# dados brutos e simulados (grandes, não versionar — regeneráveis via missing_simulation.py)
 data/raw/*
 !data/raw/.gitkeep
+data/simulated/*
+!data/simulated/.gitkeep
 
 # resultados intermediários de experimentos
 Detection/Parameters/*/*.csv
