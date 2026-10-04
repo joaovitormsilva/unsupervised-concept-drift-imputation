@@ -6,7 +6,7 @@ detectar drift).
 """
 import os
 import pandas as pd
-from sklearn.metrics import root_mean_squared_error
+from sklearn.metrics import mean_absolute_error, root_mean_squared_error
 from river import preprocessing, tree, drift
 
 from missing_simulation import simulate_patient
@@ -16,7 +16,6 @@ FILE_ID = "AV2GF3B"
 SCENARIO = "S1"
 FEATURES = ["hour", "minute"]
 SPLIT = 0
-HORIZON = 1000
 GRACE_PERIOD = 0
 
 DETECTORS = {
@@ -48,6 +47,7 @@ def main():
 
     train = df.iloc[:SPLIT].copy()
     test = df.iloc[SPLIT:].copy()
+    horizon = len(test)
 
     results = []
     for name, cdd in DETECTORS.items():
@@ -59,15 +59,23 @@ def main():
             test=test,
             imp_column="heartrate",
             target_column="target",
-            horizon=HORIZON,
+            horizon=horizon,
             include_remainder=True,
             metric=root_mean_squared_error,
             oml_grace_period=GRACE_PERIOD,
             tqdm_flag=True,
         )
+        mae = mean_absolute_error(df_true["target"], df_true["Prediction"])
         rmse = root_mean_squared_error(df_true["target"], df_true["Prediction"])
-        results.append({"detector": name, "rmse": rmse, "n_drifts": len(drifts)})
-        print(f"{name}: RMSE={rmse:.3f} | drifts detectados={len(drifts)}")
+        error_ratio = rmse / mae if mae != 0 else float("inf")
+        results.append({
+            "detector": name,
+            "mae": mae,
+            "rmse": rmse,
+            "error_ratio": error_ratio,
+            "n_drifts": len(drifts),
+        })
+        print(f"{name}: MAE={mae:.3f} | RMSE={rmse:.3f} | error_ratio={error_ratio:.3f} | drifts detectados={len(drifts)}")
 
     results_df = pd.DataFrame(results)
     out_dir = os.path.join(os.path.dirname(__file__), "Analysis", "smoke_test")
@@ -79,3 +87,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+ 

@@ -11,9 +11,7 @@ certa para você conseguir discutir e defender os resultados que já apareceram 
 
 ### O que é
 
-RMSE mede o quão longe, em média, as suas imputações ficaram do valor real de frequência cardíaca
-(FC) que foi escondido pela simulação de ausência. No seu código, isso acontece literalmente em
-`run_batch.py`:
+RMSE mede o quão longe, em média, as suas imputações ficaram do valor real de frequência cardíaca (FC) que foi escondido pela simulação de ausência. No seu código, isso acontece literalmente em `run_batch.py`:
 
 ```python
 rmse = root_mean_squared_error(df_true["target"], df_true["Prediction"])
@@ -45,29 +43,32 @@ contínuo de FC). RMSE é a métrica padrão para regressão porque:
 - Está na mesma escala da variável de interesse (bpm), facilitando interpretação clínica/prática.
 - É diferenciável e amplamente comparável entre estudos de imputação de séries temporais.
 - Penaliza mais os erros grandes que os pequenos (por causa do quadrado) — o que faz sentido aqui,
-  porque um erro de imputação de 40 bpm é muito mais perigoso/enganoso num contexto de saúde do que
-  quatro erros de 10 bpm cada.
+porque um erro de imputação de 40 bpm é muito mais perigoso/enganoso num contexto de saúde do que
+quatro erros de 10 bpm cada.
+
+
 
 ### Interpretando o número
 
 - **RMSE mais baixo** = as imputações estão, em média, mais próximas do valor real de FC → melhor
-  qualidade de imputação.
+qualidade de imputação.
 - **RMSE mais alto** = o modelo está "chutando" valores mais distantes da FC real, seja porque não
-  teve tempo de aprender o padrão do paciente, seja porque um reset (drift detectado) o jogou de
-  volta à estaca zero bem na hora errada.
+teve tempo de aprender o padrão do paciente, seja porque um reset (drift detectado) o jogou de
+volta à estaca zero bem na hora errada.
+
+
 
 ### Limitação importante para o seu TCC
 
 Duas armadilhas valem a pena registrar explicitamente:
 
 1. **Sensibilidade a erros grandes (efeito do quadrado).** Como o erro é elevado ao quadrado antes
-   de tirar a média, um único ponto com erro grande (por exemplo, o modelo imputa 60 bpm onde o real
+  de tirar a média, um único ponto com erro grande (por exemplo, o modelo imputa 60 bpm onde o real
    era 140 bpm, num momento de exercício físico) pesa muito mais no RMSE final do que vários pontos
    com erro pequeno. Isso significa que o RMSE de um detector pode "parecer ruim" principalmente por
    causa de poucos picos de erro, não porque ele erra sistematicamente todo o tempo.
-
 2. **Comparar RMSE médio entre pacientes com escalas de FC diferentes pode inverter conclusões.**
-   Cada paciente tem sua própria faixa fisiológica de FC (repouso, esforço, variabilidade natural).
+  Cada paciente tem sua própria faixa fisiológica de FC (repouso, esforço, variabilidade natural).
    Se o Paciente A tem FC variando pouco (ex.: 60–90 bpm) e o Paciente B tem FC muito mais volátil
    (ex.: 50–160 bpm, por ser mais ativo), o RMSE "natural" de qualquer modelo tende a ser maior para
    o Paciente B só pela escala/variância dos dados — não porque a imputação seja pior. Quando você
@@ -81,7 +82,11 @@ Duas armadilhas valem a pena registrar explicitamente:
 
 ---
 
+
+
 ## 2. ADWIN (Adaptive Windowing)
+
+
 
 ### Intuição
 
@@ -99,12 +104,14 @@ ruído estatístico. Se for, ele "corta" a janela: descarta $W_0$ e mantém só 
 
 ### Parâmetros principais
 
-- **`delta`** (no `river`, `drift.ADWIN(delta=0.002)` por padrão): é o parâmetro de confiança
-  estatística. Ele controla o quão "rigoroso" o teste é antes de declarar drift. Um `delta` menor
-  significa que o ADWIN exige mais evidência (menos falsos positivos, mas reage mais devagar a
-  mudanças reais); um `delta` maior o torna mais sensível (detecta drift mais rápido, mas com mais
-  risco de disparar por flutuação normal do sinal). No seu `run_batch.py`, o ADWIN é instanciado com
-  os parâmetros padrão do `river` (`drift.ADWIN()`), então está usando `delta=0.002`.
+- `delta` (no `river`, `drift.ADWIN(delta=0.002)` por padrão): é o parâmetro de confiança
+estatística. Ele controla o quão "rigoroso" o teste é antes de declarar drift. Um `delta` menor
+significa que o ADWIN exige mais evidência (menos falsos positivos, mas reage mais devagar a
+mudanças reais); um `delta` maior o torna mais sensível (detecta drift mais rápido, mas com mais
+risco de disparar por flutuação normal do sinal). No seu `run_batch.py`, o ADWIN é instanciado com
+os parâmetros padrão do `river` (`drift.ADWIN()`), então está usando `delta=0.002`.
+
+
 
 ### Por que é "não supervisionado" aqui
 
@@ -123,7 +130,11 @@ observar o comportamento do próprio dado de FC ao longo do tempo.
 
 ---
 
+
+
 ## 3. KSWIN (Kolmogorov-Smirnov Windowing)
+
+
 
 ### Intuição
 
@@ -140,13 +151,13 @@ estatística do teste ultrapassar um limiar baseado em `alpha`, ele sinaliza dri
 
 ### Parâmetros principais
 
-- **`alpha`** (padrão `0.005` no `river`): o nível de significância do teste KS — quanto menor, mais
-  evidência estatística é exigida para declarar drift (menos sensível); quanto maior, mais fácil
-  disparar.
-- **`window_size`** (padrão `100`): o tamanho total da janela de observações recentes mantida em
-  memória.
-- **`stat_size`** (padrão `30`): o tamanho da sub-amostra mais recente que é comparada contra o
-  restante da janela no teste KS. Precisa ser menor que `window_size`.
+- `alpha` (padrão `0.005` no `river`): o nível de significância do teste KS — quanto menor, mais
+evidência estatística é exigida para declarar drift (menos sensível); quanto maior, mais fácil
+disparar.
+- `window_size` (padrão `100`): o tamanho total da janela de observações recentes mantida em
+memória.
+- `stat_size` (padrão `30`): o tamanho da sub-amostra mais recente que é comparada contra o
+restante da janela no teste KS. Precisa ser menor que `window_size`.
 
 No `run_batch.py`, o KSWIN também é instanciado com os defaults (`drift.KSWIN()`).
 
@@ -163,7 +174,11 @@ no curto prazo.
 
 ---
 
+
+
 ## 4. Page-Hinkley (PH)
+
+
 
 ### Intuição
 
@@ -197,13 +212,15 @@ contribui para ele reagir com mais facilidade.
 
 ### Parâmetros principais (defaults do `river.drift.PageHinkley()`)
 
-- **`delta`** (padrão `0.005`): a margem de tolerância — o quanto uma observação pode se desviar da
-  média sem contar como "evidência de mudança". Quanto menor, mais sensível.
-- **`threshold`** (padrão `50`): o limiar que a soma acumulada `PH_T` precisa ultrapassar para disparar
-  o drift. Quanto menor, mais fácil disparar.
-- **`min_instances`** (padrão `30`): número mínimo de observações que precisam ter sido vistas antes
-  de o detector começar a poder disparar (evita disparos espúrios logo no início, quando a média ainda
-  está sendo estabelecida).
+- `delta` (padrão `0.005`): a margem de tolerância — o quanto uma observação pode se desviar da
+média sem contar como "evidência de mudança". Quanto menor, mais sensível.
+- `threshold` (padrão `50`): o limiar que a soma acumulada `PH_T` precisa ultrapassar para disparar
+o drift. Quanto menor, mais fácil disparar.
+- `min_instances` (padrão `30`): número mínimo de observações que precisam ter sido vistas antes
+de o detector começar a poder disparar (evita disparos espúrios logo no início, quando a média ainda
+está sendo estabelecida).
+
+
 
 ### Por que ele dispara tanto mais que os outros
 
@@ -211,18 +228,20 @@ No lote de 5 pacientes que você já rodou, o PH disparou em média **13.161 dri
 do ADWIN e **5.486** do KSWIN — mais que o dobro. Isso é consistente com a natureza do algoritmo:
 
 - O PH acumula qualquer desvio sustentado acima da média (mesmo pequeno) — ele não exige que a
-  diferença entre duas janelas inteiras seja estatisticamente robusta como o ADWIN ou o KSWIN fazem.
-  Basta uma sequência de valores um pouco acima do "normal" (por exemplo, um paciente que fica mais
-  tempo com FC levemente elevada) para a soma cumulativa ultrapassar o `threshold=50`.
+diferença entre duas janelas inteiras seja estatisticamente robusta como o ADWIN ou o KSWIN fazem.
+Basta uma sequência de valores um pouco acima do "normal" (por exemplo, um paciente que fica mais
+tempo com FC levemente elevada) para a soma cumulativa ultrapassar o `threshold=50`.
 - Com os parâmetros padrão do `river`, o PH também é conhecido por ser mais sensível a variações no
-  próprio ritmo natural da FC (que sobe e desce constantemente ao longo do dia), interpretando parte
-  dessa variabilidade normal como mudança de regime.
+próprio ritmo natural da FC (que sobe e desce constantemente ao longo do dia), interpretando parte
+dessa variabilidade normal como mudança de regime.
 - Diferente do ADWIN (que reavalia várias formas de dividir a janela com garantias estatísticas mais
-  fortes) e do KSWIN (que exige uma diferença de distribuição detectável pelo teste KS num tamanho de
-  amostra fixo), o PH é conceitualmente mais simples e "gatilho fácil" por padrão — o que na prática
-  se traduz em muito mais resets do modelo de imputação.
+fortes) e do KSWIN (que exige uma diferença de distribuição detectável pelo teste KS num tamanho de
+amostra fixo), o PH é conceitualmente mais simples e "gatilho fácil" por padrão — o que na prática
+se traduz em muito mais resets do modelo de imputação.
 
 ---
+
+
 
 ## 5. Como tudo se encaixa no pipeline — e o trade-off que explica seus resultados
 
@@ -250,13 +269,15 @@ Cada detector (ADWIN, KSWIN, PH) tem, no fundo, um "botão de sensibilidade" (`d
 que define um equilíbrio entre dois erros opostos:
 
 - **Detector pouco sensível** (reage devagar): quando o padrão de FC realmente muda (ex.: paciente
-  dorme, depois acorda e faz exercício), o modelo demora a perceber e continua tentando imputar com
-  base num padrão antigo que não vale mais → RMSE alto durante a "mudança real" que não foi capturada.
+dorme, depois acorda e faz exercício), o modelo demora a perceber e continua tentando imputar com
+base num padrão antigo que não vale mais → RMSE alto durante a "mudança real" que não foi capturada.
 - **Detector muito sensível** (reage rápido, como o PH): qualquer flutuação natural da FC (que é um
-  sinal ruidoso por natureza) já é tratada como "mudança real", disparando resets constantes. Cada
-  reset joga fora tudo que o modelo já tinha aprendido, forçando-o a reconstruir conhecimento do zero
-  repetidamente — o que teoricamente deveria prejudicar o desempenho, porque o modelo nunca tem tempo
-  de "amadurecer".
+sinal ruidoso por natureza) já é tratada como "mudança real", disparando resets constantes. Cada
+reset joga fora tudo que o modelo já tinha aprendido, forçando-o a reconstruir conhecimento do zero
+repetidamente — o que teoricamente deveria prejudicar o desempenho, porque o modelo nunca tem tempo
+de "amadurecer".
+
+
 
 ### O padrão contraintuitivo observado no seu TCC
 
@@ -270,18 +291,18 @@ KSWIN). Algumas hipóteses plausíveis para investigar no seu TCC (não são con
 linhas de raciocínio válidas para a discussão):
 
 1. **Heterogeneidade entre pacientes.** Como você mesmo notou na seção de RMSE, a média entre
-   pacientes pode inverter rankings observados individualmente. É possível que, para a maioria dos
+  pacientes pode inverter rankings observados individualmente. É possível que, para a maioria dos
    cinco pacientes (ou para os que têm FC mais instável/com mudanças de regime mais frequentes —
    repouso/atividade), resetar com mais frequência seja realmente vantajoso porque o "conhecimento
    antigo" descartado era mesmo obsoleto com mais frequência do que no paciente testado isoladamente.
-2. **`HoeffdingTreeRegressor` recomeça rápido.** Modelos incrementais como a Hoeffding Tree conseguem
-   reconstruir uma estrutura útil com relativamente poucos exemplos, especialmente se o padrão de FC
+2. `HoeffdingTreeRegressor` **recomeça rápido.** Modelos incrementais como a Hoeffding Tree conseguem
+  reconstruir uma estrutura útil com relativamente poucos exemplos, especialmente se o padrão de FC
    por horário do dia (suas features são `hour` e `minute`) se repete de forma parecida todos os dias.
    Se o "custo" de resetar é baixo (o modelo se recupera rápido), a vantagem de "esquecer" um padrão
    desatualizado rapidamente pode superar o custo do reset — principalmente em pacientes com FC mais
    dinâmica.
 3. **O paciente único testado pode não ser representativo.** Um único caso pode ter uma dinâmica de FC
-   mais estável, onde resets frequentes do PH realmente atrapalham (porque não havia muita mudança real
+  mais estável, onde resets frequentes do PH realmente atrapalham (porque não havia muita mudança real
    para justificar tantos resets). Isso reforça a importância de reportar resultados por paciente
    individualmente, além da média agregada, e de discutir explicitamente essa não-generalização de
    conclusões tiradas de N=1 para o conjunto completo — um ponto metodológico relevante para a seção de

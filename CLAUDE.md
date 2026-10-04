@@ -37,6 +37,13 @@ https://github.com/afonsoMatheus/supervised-concept-drift-analysis
 4. **Modelo imputador base**: `preprocessing.StandardScaler() |
    tree.HoeffdingTreeRegressor()`, igual ao baseline "HT" do projeto irmão.
 
+5. **Avaliação por paciente** (confirmado com o orientador em 2026-09-27):
+   cada paciente é um fluxo independente com modelo/detector próprios e
+   adaptáveis. Métricas (MAE, RMSE, error_ratio) por paciente; a
+   distribuição entre pacientes é apresentada em boxplots (estilo Fig. 3a do
+   artigo do Afonso, `HeadQuarter/TCC/uteis/EvaluatingSuperCD.pdf`). Não é
+   necessário agregar métricas globais (micro).
+
 ## Armadilhas já encontradas (não repetir)
 
 - **`river` 0.26+**: `detector.update(x)` não retorna mais bool — ele muda
@@ -77,6 +84,7 @@ Detection/
   Parameters/               análise de sensibilidade de hiperparâmetro (futuro)
 docs/
   conceitos.md          explicação didática de RMSE/ADWIN/KSWIN/PageHinkley
+  perguntas_abertas.md  decisões pendentes (métrica principal, adaptar HT, etc.) — consultar antes de mudar metodologia
 ```
 
 ## Como rodar

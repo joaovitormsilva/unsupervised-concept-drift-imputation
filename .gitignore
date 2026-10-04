@@ -13,3 +13,10 @@ data/simulated/*
 # resultados intermediários de experimentos
 Detection/Parameters/*/*.csv
 Detection/Parameters/*/*.png
+
+# checkpoints e logs dos batches
+Detection/Analysis/batch_results/checkpoints/
+Detection/Analysis/logs/
+Detection/Parameters/checkpoints/
+Detection/Parameters/logs/
+Detection/Analysis/batch_results/checkpoints_tuned/
