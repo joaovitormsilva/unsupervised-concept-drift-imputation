@@ -13,6 +13,8 @@ Uso:
     python run_sweep.py --workers 6
     python run_sweep.py --scenarios S1 --workers 4
     python run_sweep.py --summary-only        # só refaz os resumos a partir dos checkpoints
+    python run_sweep.py --features mod        # x = minuto do dia (saídas com sufixo _mod)
+    python run_sweep.py --features mod --patients all   # os 30 pacientes (saídas com sufixo _30p)
 """
 import argparse
 import itertools
@@ -29,7 +31,7 @@ from river import drift
 PARAMS_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(PARAMS_DIR))
 
-from run_batch import BATCH_RESULTS_DIR, build_base_model, prepare_stream, run_config  # noqa: E402
+from run_batch import BATCH_RESULTS_DIR, FEATURE_SETS, build_base_model, prepare_stream, run_config  # noqa: E402
 
 RESULTS_DIR = os.path.join(PARAMS_DIR, "results")
 CHECKPOINT_DIR = os.path.join(PARAMS_DIR, "checkpoints")
@@ -82,22 +84,35 @@ def select_patients() -> pd.DataFrame:
     return picked
 
 
-def ckpt_path(scenario: str, patient: str, config_id: str) -> str:
-    return os.path.join(CHECKPOINT_DIR, scenario, f"{patient}__{config_id}.csv")
+def all_patients() -> pd.DataFrame:
+    s1 = pd.read_csv(os.path.join(BATCH_RESULTS_DIR, "batch_results_S1.csv"))
+    return s1[s1["detector"] == "Media"][["patient", "n_imputed"]].reset_index(drop=True)
 
 
-def run_task(scenario: str, patient: str, detector: str, config_id: str, params: dict) -> dict | None:
+def feat_suffix(features: str) -> str:
+    return "" if features == "hm" else f"_{features}"
+
+
+def ckpt_dir(scenario: str, features: str) -> str:
+    return os.path.join(CHECKPOINT_DIR + feat_suffix(features), scenario)
+
+
+def ckpt_path(scenario: str, patient: str, config_id: str, features: str) -> str:
+    return os.path.join(ckpt_dir(scenario, features), f"{patient}__{config_id}.csv")
+
+
+def run_task(scenario: str, patient: str, detector: str, config_id: str, params: dict, features: str) -> dict | None:
     t0 = time.process_time()
     try:
-        train, test = prepare_stream(patient, scenario)
+        train, test = prepare_stream(patient, scenario, features)
         cdd = GRIDS[detector][0](**params) if detector in GRIDS else None
         metrics = run_config(build_base_model(), cdd, train, test)
         row = {
             "scenario": scenario, "patient": patient, "detector": detector,
-            "config_id": config_id, **{f"p_{k}": v for k, v in params.items()}, **metrics,
+            "config_id": config_id, "features": features, **{f"p_{k}": v for k, v in params.items()}, **metrics,
             "cpu_s": time.process_time() - t0,
         }
-        path = ckpt_path(scenario, patient, config_id)
+        path = ckpt_path(scenario, patient, config_id, features)
         pd.DataFrame([row]).to_csv(path + ".tmp", index=False)
         os.replace(path + ".tmp", path)
         return row
@@ -106,14 +121,17 @@ def run_task(scenario: str, patient: str, detector: str, config_id: str, params:
         return None
 
 
-def summarize(scenario: str):
-    ckpt_dir = os.path.join(CHECKPOINT_DIR, scenario)
-    files = [f for f in os.listdir(ckpt_dir) if f.endswith(".csv")] if os.path.isdir(ckpt_dir) else []
+def summarize(scenario: str, features: str, patients: list[str], tag: str):
+    d = ckpt_dir(scenario, features)
+    files = [f for f in os.listdir(d) if f.endswith(".csv")] if os.path.isdir(d) else []
     if not files:
         return
-    df = pd.concat([pd.read_csv(os.path.join(ckpt_dir, f)) for f in files], ignore_index=True)
+    # checkpoints são compartilhados entre o sweep de 10 e o de 30 pacientes; filtra o conjunto pedido
+    files = [f for f in files if f.split("__")[0] in set(patients)]
+    df = pd.concat([pd.read_csv(os.path.join(d, f)) for f in files], ignore_index=True)
     os.makedirs(RESULTS_DIR, exist_ok=True)
-    df.to_csv(os.path.join(RESULTS_DIR, f"sweep_{scenario}.csv"), index=False)
+    sfx = feat_suffix(features) + tag
+    df.to_csv(os.path.join(RESULTS_DIR, f"sweep{sfx}_{scenario}.csv"), index=False)
 
     # Rank de RMSE entre as configurações do mesmo detector, dentro de cada
     # paciente (rank 1 = melhor). A HT sem detector entra em todos os grupos
@@ -134,9 +152,9 @@ def summarize(scenario: str):
         error_ratio_medio=("error_ratio", "mean"),
         n_drifts_medio=("n_drifts", "mean"),
     ).reset_index().sort_values(["detector", "rank_medio"])
-    summary.to_csv(os.path.join(RESULTS_DIR, f"sweep_ranking_{scenario}.csv"), index=False)
+    summary.to_csv(os.path.join(RESULTS_DIR, f"sweep_ranking{sfx}_{scenario}.csv"), index=False)
 
-    print(f"\n=== {scenario}: top 3 por detector (rank médio de RMSE) ===")
+    print(f"\n=== {scenario}{sfx}: top 3 por detector (rank médio de RMSE) ===")
     print(summary.groupby("detector").head(3).to_string(index=False))
 
 
@@ -145,25 +163,29 @@ def main():
     parser.add_argument("--scenarios", nargs="+", default=["S1", "S2", "S3"])
     parser.add_argument("--workers", type=int, default=6)
     parser.add_argument("--summary-only", action="store_true")
+    parser.add_argument("--features", choices=list(FEATURE_SETS), default="hm")
+    parser.add_argument("--patients", choices=["sweep", "all"], default="sweep",
+                        help="sweep = 10 sorteados (sweep_patients.csv); all = os 30 (sufixo _30p)")
     args = parser.parse_args()
 
-    patients = select_patients()
+    patients = select_patients() if args.patients == "sweep" else all_patients()
+    tag = "" if args.patients == "sweep" else "_30p"
     configs = build_sweep_configs()
     size = dict(zip(patients["patient"], patients["n_imputed"]))
 
     if not args.summary_only:
         for s in args.scenarios:
-            os.makedirs(os.path.join(CHECKPOINT_DIR, s), exist_ok=True)
+            os.makedirs(ckpt_dir(s, args.features), exist_ok=True)
         tasks = [
-            (s, p, det, cid, params)
+            (s, p, det, cid, params, args.features)
             for s in args.scenarios for p in patients["patient"] for det, cid, params in configs
-            if not os.path.exists(ckpt_path(s, p, cid))
+            if not os.path.exists(ckpt_path(s, p, cid, args.features))
         ]
         # maiores primeiro: melhor balanceamento entre workers
         tasks.sort(key=lambda t: -size[t[1]])
         total = len(args.scenarios) * len(patients) * len(configs)
         print(
-            f"Pacientes: {', '.join(patients['patient'])}\n"
+            f"Features: {args.features} | {len(patients)} pacientes: {', '.join(patients['patient'])}\n"
             f"{len(configs)} configs × {len(patients)} pacientes × {len(args.scenarios)} cenários = {total} tarefas | "
             f"{total - len(tasks)} prontas | {len(tasks)} a rodar | workers={args.workers}",
             flush=True,
@@ -180,7 +202,7 @@ def main():
         print(f"\nTempo total: {(time.time() - t0) / 60:.1f} min", flush=True)
 
     for s in args.scenarios:
-        summarize(s)
+        summarize(s, args.features, list(patients["patient"]), tag)
 
 
 if __name__ == "__main__":

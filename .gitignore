@@ -20,3 +20,8 @@ Detection/Analysis/logs/
 Detection/Parameters/checkpoints/
 Detection/Parameters/logs/
 Detection/Analysis/batch_results/checkpoints_tuned/
+Detection/Analysis/batch_results/checkpoints*/
+Detection/Parameters/checkpoints*/
+
+# resultados do sweep (base da escolha dos parâmetros ajustados) são versionados
+!Detection/Parameters/results/*.csv

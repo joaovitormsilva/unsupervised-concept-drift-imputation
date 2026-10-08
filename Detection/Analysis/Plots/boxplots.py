@@ -6,7 +6,8 @@ Afonso (SBBD 2026) / notebook Imputation/Analysis/analysis_plots.ipynb.
 Uso:
     python boxplots.py            # detectores com defaults do river
     python boxplots.py --tuned    # detectores com parâmetros do sweep
-Saída: Plots/boxplots/boxplot[_tuned]_{mae,rmse,error_ratio}.{png,pdf}
+    python boxplots.py --suffix _tuned_mod   # qualquer batch_results{suffix}_S*.csv
+Saída: Plots/<rodada>/boxplots/{mae,rmse,error_ratio}.png (+ pdf/ ao lado)
 """
 import argparse
 import os
@@ -18,7 +19,29 @@ import seaborn as sns
 PLOTS_DIR = os.path.dirname(os.path.abspath(__file__))
 ANALYSIS_DIR = os.path.dirname(PLOTS_DIR)
 BATCH_RESULTS_DIR = os.path.join(ANALYSIS_DIR, "batch_results")
-OUT_DIR = os.path.join(PLOTS_DIR, "boxplots")
+
+# Uma pasta por rodada do batch (sufixo de batch_results{sufixo}_S*.csv),
+# numeradas na ordem em que foram feitas.
+RUN_DIRS = {
+    "": "1_hora_minuto_defaults",
+    "_tuned": "2_hora_minuto_ajustados",
+    "_mod": "3_minuto_do_dia_defaults",
+    "_tuned_mod": "4_minuto_do_dia_ajustados",
+    "_tuned_mod_30p": "5_minuto_do_dia_ajustados_30p",
+}
+
+
+def out_dir(suffix: str, kind: str) -> str:
+    """Pasta de saída de um tipo de gráfico (boxplots, cd_diagrams) para a rodada; cria pdf/ dentro."""
+    path = os.path.join(PLOTS_DIR, RUN_DIRS[suffix], kind)
+    os.makedirs(os.path.join(path, "pdf"), exist_ok=True)
+    return path
+
+
+def save_figure(path_png_dir: str, name: str):
+    """Salva name.png na pasta e name.pdf na subpasta pdf/."""
+    plt.savefig(os.path.join(path_png_dir, f"{name}.png"), dpi=300, bbox_inches="tight")
+    plt.savefig(os.path.join(path_png_dir, "pdf", f"{name}.pdf"), bbox_inches="tight")
 
 SCENARIOS = ["S1", "S2", "S3"]
 METHOD_LABELS = {
@@ -68,21 +91,21 @@ def plot_metric(df: pd.DataFrame, metric: str, ylabel: str, suffix: str):
         frameon=False,
     )
     plt.tight_layout()
-    for ext in ("png", "pdf"):
-        plt.savefig(os.path.join(OUT_DIR, f"boxplot{suffix}_{metric}.{ext}"), dpi=300, bbox_inches="tight")
+    save_figure(out_dir(suffix, "boxplots"), metric)
     plt.close()
 
 
 def main():
     sns.set_theme(style="whitegrid", context="paper", font_scale=1.2)
-    os.makedirs(OUT_DIR, exist_ok=True)
     parser = argparse.ArgumentParser()
-    parser.add_argument("--tuned", action="store_true")
-    suffix = "_tuned" if parser.parse_args().tuned else ""
+    parser.add_argument("--tuned", action="store_true", help="atalho para --suffix _tuned")
+    parser.add_argument("--suffix", default="", help="ex.: _tuned, _mod, _tuned_mod")
+    args = parser.parse_args()
+    suffix = "_tuned" if args.tuned else args.suffix
     df = load_results(suffix)
     for metric, ylabel in METRICS.items():
         plot_metric(df, metric, ylabel, suffix)
-        print(f"boxplot{suffix}_{metric} salvo em {OUT_DIR}")
+        print(f"{metric} salvo em {out_dir(suffix, 'boxplots')}")
 
 
 if __name__ == "__main__":

@@ -43,26 +43,34 @@ dele. Ao resolver, mover para "Resolvidas" com a data e a decisão.
   limitação). Ressalva: o ótimo por RMSE pode mudar depois de adaptar a HT
   (item 2).
 
-### 6. KSWIN sem seed no batch principal
-- **Contexto:** o `KSWIN` sorteia a janela de referência, e o `run_batch.py`
-  usa `seed=None`. Os resultados de KSWIN no batch não são reproduzíveis
-  exatamente. O sweep já usa `seed=1`.
-- **Opções:** fixar `seed=1` no batch principal na próxima rodada (junto com a
-  adaptação da HT ou os parâmetros ajustados).
+- **2026-10-07:** com minuto do dia, o ótimo dos 10 pacientes não
+  generalizou para os 30 (ex.: ADWIN S2). Decisão do usuário: refazer o sweep
+  com os 30 pacientes (`run_sweep.py --features mod --patients all`, saídas
+  `_30p`) e usar esses parâmetros na rodada 5. Parâmetros escolhidos e
+  avaliados nos mesmos 30 pacientes: resultado otimista, registrar como
+  limitação no texto.
 
-### 4. Incluir CD-diagram (Wilcoxon + Holm)?
-- **Contexto:** o artigo do Afonso usa boxplot (distribuição) + CD-diagram
-  (significância estatística das diferenças entre métodos, pareado por
-  paciente). Hoje só temos os boxplots.
-- **Depende disso:** se o texto vai afirmar que um método é melhor que outro.
-
-### 5. Ausência descartada no início de cada série
+### 4. Ausência descartada no início de cada série
 - **Contexto:** o pipeline corta tudo antes do primeiro valor observado
   (`first_valid_index()`), o que descarta ~2% dos ausentes simulados. O
   pipeline do Afonso faz o mesmo, então os resultados seguem comparáveis.
 - **Prioridade:** baixa; registrar como limitação no texto.
 
 ## Resolvidas
+
+- **2026-10-06 — KSWIN sempre com `seed=1`.** Todas as rodadas (o KSWIN é o
+  único componente aleatório; Média, HT, ADWIN e PH são determinísticos). As
+  rodadas 1 e 3 tiveram só o KSWIN refeito; o `run_batch.py` agora refaz
+  apenas os métodos cujos parâmetros mudaram em relação ao checkpoint.
+- **2026-10-06 — Sweep refeito com minuto do dia.** `run_sweep.py --features mod`
+  (mesmos 10 pacientes e mesma grade); a rodada 4 usa esses parâmetros.
+
+- **2026-10-05 — CD-diagram incluído.** `Detection/Analysis/Plots/cd_diagram.py`,
+  adaptado de hfawaz/cd-diagram (Friedman + Wilcoxon pareado por paciente +
+  Holm, α = 0,05), para MAE e RMSE por cenário.
+- **2026-10-05 — Entrada do imputador = minuto do dia.** `x = {minute_of_day}`
+  (hora*60 + minuto) em vez de `{hour, minute}`. Rodadas com sufixo `_mod`
+  (defaults e ajustados); as rodadas antigas foram mantidas para comparação.
 
 - **2026-09-27 — Avaliação por paciente.** Cada paciente é um fluxo
   independente com modelo e detector próprios. Métricas por paciente,

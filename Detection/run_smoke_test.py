@@ -21,7 +21,7 @@ GRACE_PERIOD = 0
 DETECTORS = {
     "Sem detector (HT)": None,
     "ADWIN": drift.ADWIN(),
-    "KSWIN": drift.KSWIN(),
+    "KSWIN": drift.KSWIN(seed=1),
     "PH": drift.PageHinkley(),
 }
 

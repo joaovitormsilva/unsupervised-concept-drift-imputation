@@ -54,7 +54,9 @@ https://github.com/afonsoMatheus/supervised-concept-drift-analysis
   de aprendizado — `learn_one`/`predict_one` continuam ponto a ponto dentro do
   lote), rodar com `horizon=1` mede recursos a cada linha e fica ~15x mais
   lento sem ganho nenhum de precisão nas métricas que usamos (RMSE, n_drifts).
-  Use `HORIZON=1000` (já configurado em `run_smoke_test.py`/`run_batch.py`).
+  Hoje `run_batch.py`/`run_smoke_test.py` usam `horizon = len(test)` (a série
+  inteira numa janela só, decisão do usuário): não muda predições nem métricas,
+  só a granularidade da medição de tempo/memória.
 - **Tamanho de série varia MUITO entre pacientes** (75 mil a 1,4 milhão de
   linhas). Não assuma que todos os pacientes têm custo parecido — o paciente
   `ASFODQR` sozinho já levou ~19 min mesmo com o horizon otimizado.
@@ -80,7 +82,9 @@ Detection/
     batch_results/          resultados agregados por lote (batch_results_<cenário>.csv)
     ranking/                ranking.py + ranking_<cenário>.csv
     individual_patients/    aprofundamento em pacientes específicos
-    Plots/                  gráficos (CD-diagrams etc, inspirados nos notebooks do projeto irmão)
+    Plots/                  boxplots.py + cd_diagram.py; saída em uma pasta por rodada:
+      1_hora_minuto_defaults/  2_hora_minuto_ajustados/  3_minuto_do_dia_defaults/  4_minuto_do_dia_ajustados/
+        boxplots/ e cd_diagrams/ (png na pasta, pdf/ dentro)
   Parameters/               análise de sensibilidade de hiperparâmetro (futuro)
 docs/
   conceitos.md          explicação didática de RMSE/ADWIN/KSWIN/PageHinkley
@@ -95,6 +99,19 @@ cd Detection
 ../.venv/bin/python run_batch.py --scenario S1 --patients 5         # lote pequeno
 ../.venv/bin/python run_batch.py --scenario S1 --patients all --workers 4  # todos os 30
 ```
+
+## Máquina remota (VM do grupo)
+
+- `ssh tcc-vm` (alias em `~/.ssh/config`, salta por `lbdi`; chave
+  `~/.ssh/id_ed25519_lbdi`). 16 CPUs, 30 GB RAM, Ubuntu, Python 3.14, sem sudo.
+- Projeto em `~/unsupervised-concept-drift-imputation` (cópia via rsync, sem
+  `.venv` e sem `data/raw`; os CSVs de `data/simulated/` bastam). Venv criado
+  com `python3 -m venv --without-pip` + `get-pip.py` (não há `ensurepip`).
+- Rodar dentro de `tmux` (`tmux attach -t tcc`); `TCC_INHIBITED=1` para o
+  `run_all_scenarios.sh` não chamar `systemd-inhibit`.
+- Resultados voltam por rsync (`batch_results/`, `ranking/`, `Plots/`,
+  `Parameters/results/` e checkpoints).
+- Validado: a VM reproduz exatamente os resultados locais.
 
 ## Worktrees
 

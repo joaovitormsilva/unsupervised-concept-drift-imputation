@@ -7,6 +7,7 @@
 #   WORKERS=3 ./run_all_scenarios.sh S2 S3
 #   FRESH=1 ./run_all_scenarios.sh         # ignora checkpoints e recomeça
 #   TUNED=1 ./run_all_scenarios.sh         # detectores com parâmetros do sweep
+#   FEATURES=mod ./run_all_scenarios.sh    # x = minuto do dia (sufixo _mod)
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -22,6 +23,8 @@ EXTRA=()
 [[ -n "${FRESH:-}" ]] && EXTRA+=(--fresh)
 TAG=""
 if [[ -n "${TUNED:-}" ]]; then EXTRA+=(--tuned); TAG="_tuned"; fi
+if [[ "${FEATURES:-hm}" == "mod" ]]; then EXTRA+=(--features mod); TAG="${TAG}_mod"; fi
+if [[ "${SWEEP_SET:-10p}" == "30p" ]]; then EXTRA+=(--sweep-set 30p); TAG="${TAG}_30p"; fi
 
 LOG_DIR=Analysis/logs
 mkdir -p "$LOG_DIR"
