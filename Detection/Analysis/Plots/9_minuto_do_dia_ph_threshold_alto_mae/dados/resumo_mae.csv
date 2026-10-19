@@ -1,0 +1,16 @@
+scenario,detector,mae_mediana,mae_media,mae_q1,mae_q3,resets_mediana,params
+S1,ADWIN,15.63,20.44,13.25,20.12,5.0,min_window_length=50000
+S1,KSWIN,32.11,32.52,23.1,41.9,21.0,alpha=0.0001;window_size=30000;stat_size=200;seed=1
+S1,Media,16.8,17.38,14.28,18.08,0.0,
+S1,PH,33.51,41.55,21.56,57.11,18.0,threshold=50000.0;delta=5.0;min_instances=5000.0
+S1,Sem detector (HT),13.18,14.07,10.74,15.46,0.0,
+S2,ADWIN,24.34,25.9,18.87,29.22,5.5,min_window_length=50000
+S2,KSWIN,45.93,48.22,28.06,62.37,21.5,alpha=1e-05;window_size=30000;stat_size=800;seed=1
+S2,Media,20.57,22.21,17.69,25.49,0.0,
+S2,PH,62.11,60.4,40.13,73.75,15.5,threshold=50000.0;delta=5.0;min_instances=5000.0
+S2,Sem detector (HT),18.71,18.46,13.85,20.72,0.0,
+S3,ADWIN,23.7,26.83,18.38,26.76,6.0,min_window_length=50000
+S3,KSWIN,36.73,44.33,30.98,51.53,22.0,alpha=0.001;window_size=30000;stat_size=200;seed=1
+S3,Media,25.04,26.83,22.17,29.92,0.0,
+S3,PH,67.27,64.08,30.91,97.75,18.0,threshold=50000.0;delta=5.0;min_instances=5000.0
+S3,Sem detector (HT),17.96,19.25,15.62,23.16,0.0,

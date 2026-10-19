@@ -24,7 +24,7 @@ EXTRA=()
 TAG=""
 if [[ -n "${TUNED:-}" ]]; then EXTRA+=(--tuned); TAG="_tuned"; fi
 if [[ "${FEATURES:-hm}" == "mod" ]]; then EXTRA+=(--features mod); TAG="${TAG}_mod"; fi
-if [[ "${SWEEP_SET:-10p}" == "30p" ]]; then EXTRA+=(--sweep-set 30p); TAG="${TAG}_30p"; fi
+if [[ "${SWEEP_SET:-10p}" != "10p" ]]; then EXTRA+=(--sweep-set "$SWEEP_SET"); TAG="${TAG}_${SWEEP_SET}"; fi
 
 LOG_DIR=Analysis/logs
 mkdir -p "$LOG_DIR"

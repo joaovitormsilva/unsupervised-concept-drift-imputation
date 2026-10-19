@@ -15,6 +15,8 @@ Uso:
     python run_sweep.py --summary-only        # só refaz os resumos a partir dos checkpoints
     python run_sweep.py --features mod        # x = minuto do dia (saídas com sufixo _mod)
     python run_sweep.py --features mod --patients all   # os 30 pacientes (saídas com sufixo _30p)
+    python run_sweep.py --features mod --patients all --grid v2   # grade do orientador (sufixo _v2)
+    python run_sweep.py --features mod --patients all --grid v3 --metric mae   # PH com thresholds altos, rank por MAE
 """
 import argparse
 import itertools
@@ -40,9 +42,9 @@ PATIENTS_FILE = os.path.join(PARAMS_DIR, "sweep_patients.csv")
 SEED = 1
 N_PER_STRATUM = {"pequeno": 3, "medio": 4, "grande": 3}
 
-# Defaults do river incluídos em cada grade. KSWIN recebe seed fixa porque
+# Grade v1 (original): defaults do river incluídos. KSWIN recebe seed fixa porque
 # amostra aleatoriamente a janela de referência.
-GRIDS = {
+GRIDS_V1 = {
     "ADWIN": (drift.ADWIN, {"delta": [1e-5, 1e-4, 0.002, 0.01, 0.05]}),
     "KSWIN": (drift.KSWIN, {
         "alpha": [1e-5, 1e-4, 1e-3, 0.005, 0.01],
@@ -55,11 +57,37 @@ GRIDS = {
     }),
 }
 
+# Grade v2 (orientador, 2026-10-11): janelas na escala de dias (1 linha = 1 min).
+# KSWIN: window_size grande, stat_size variando, só os três alphas menores.
+# ADWIN: min_window_length (piso para o intervalo entre resets), delta no default.
+# PH fica igual à v1 (reaproveita os checkpoints).
+GRIDS_V2 = {
+    "ADWIN": (drift.ADWIN, {"min_window_length": [10000, 15000, 20000, 30000, 50000]}),
+    "KSWIN": (drift.KSWIN, {
+        "alpha": [1e-5, 1e-4, 1e-3],
+        "window_size": [5000, 10000, 20000, 30000],
+        "stat_size": [200, 400, 800, 1000],
+        "seed": [SEED],
+    }),
+    "PH": GRIDS_V1["PH"],
+}
+# Grade v3 (usuário, 2026-10-16): só PH, thresholds acima da v1 (o PH da v1 reseta a
+# cada ~50 pontos) e min_instances (mínimo de pontos após cada reset antes de poder disparar).
+GRIDS_V3 = {
+    "PH": (drift.PageHinkley, {
+        "threshold": [1000, 2000, 5000, 10000, 20000, 50000],
+        "delta": [0.005, 0.5, 2, 5],
+        "min_instances": [30, 1000, 5000, 10000],
+    }),
+}
+GRID_VERSIONS = {"v1": GRIDS_V1, "v2": GRIDS_V2, "v3": GRIDS_V3}
+GRIDS = GRIDS_V1  # classes dos detectores (iguais nas duas versões)
 
-def build_sweep_configs() -> list[tuple[str, str, dict]]:
+
+def build_sweep_configs(grid_version: str = "v1") -> list[tuple[str, str, dict]]:
     """Lista de (detector, config_id, params). config_id é seguro para nome de arquivo."""
     configs = [("Sem detector (HT)", "HT", {})]
-    for det, (_, grid) in GRIDS.items():
+    for det, (_, grid) in GRID_VERSIONS[grid_version].items():
         keys = list(grid)
         for values in itertools.product(*(grid[k] for k in keys)):
             params = dict(zip(keys, values))
@@ -121,26 +149,27 @@ def run_task(scenario: str, patient: str, detector: str, config_id: str, params:
         return None
 
 
-def summarize(scenario: str, features: str, patients: list[str], tag: str):
+def summarize(scenario: str, features: str, patients: list[str], tag: str, config_ids: set[str], metric: str = "rmse"):
     d = ckpt_dir(scenario, features)
     files = [f for f in os.listdir(d) if f.endswith(".csv")] if os.path.isdir(d) else []
     if not files:
         return
     # checkpoints são compartilhados entre o sweep de 10 e o de 30 pacientes; filtra o conjunto pedido
-    files = [f for f in files if f.split("__")[0] in set(patients)]
+    # e entre as versões de grade; filtra as configurações da grade pedida
+    files = [f for f in files if f.split("__")[0] in set(patients) and f.split("__")[1][:-4] in config_ids]
     df = pd.concat([pd.read_csv(os.path.join(d, f)) for f in files], ignore_index=True)
     os.makedirs(RESULTS_DIR, exist_ok=True)
     sfx = feat_suffix(features) + tag
     df.to_csv(os.path.join(RESULTS_DIR, f"sweep{sfx}_{scenario}.csv"), index=False)
 
-    # Rank de RMSE entre as configurações do mesmo detector, dentro de cada
+    # Rank da métrica (RMSE por padrão) entre as configurações do mesmo detector, dentro de cada
     # paciente (rank 1 = melhor). A HT sem detector entra em todos os grupos
     # como referência.
     ht = df[df["detector"] == "Sem detector (HT)"]
     parts = []
-    for det in GRIDS:
+    for det in [d for d in GRIDS if (df["detector"] == d).any()]:
         g = pd.concat([df[df["detector"] == det], ht.assign(detector=det)], ignore_index=True)
-        g["rank"] = g.groupby("patient")["rmse"].rank(method="average")
+        g["rank"] = g.groupby("patient")[metric].rank(method="average")
         parts.append(g)
     ranked = pd.concat(parts, ignore_index=True)
     summary = ranked.groupby(["detector", "config_id"]).agg(
@@ -149,12 +178,13 @@ def summarize(scenario: str, features: str, patients: list[str], tag: str):
         rmse_medio=("rmse", "mean"),
         rmse_mediana=("rmse", "median"),
         mae_medio=("mae", "mean"),
+        mae_mediana=("mae", "median"),
         error_ratio_medio=("error_ratio", "mean"),
         n_drifts_medio=("n_drifts", "mean"),
     ).reset_index().sort_values(["detector", "rank_medio"])
     summary.to_csv(os.path.join(RESULTS_DIR, f"sweep_ranking{sfx}_{scenario}.csv"), index=False)
 
-    print(f"\n=== {scenario}{sfx}: top 3 por detector (rank médio de RMSE) ===")
+    print(f"\n=== {scenario}{sfx}: top 3 por detector (rank médio de {metric.upper()}) ===")
     print(summary.groupby("detector").head(3).to_string(index=False))
 
 
@@ -166,11 +196,16 @@ def main():
     parser.add_argument("--features", choices=list(FEATURE_SETS), default="hm")
     parser.add_argument("--patients", choices=["sweep", "all"], default="sweep",
                         help="sweep = 10 sorteados (sweep_patients.csv); all = os 30 (sufixo _30p)")
+    parser.add_argument("--grid", choices=list(GRID_VERSIONS), default="v1",
+                        help="v2 = grade do orientador (sufixo _v2); v3 = só PH com thresholds altos (sufixo _v3)")
+    parser.add_argument("--metric", choices=["rmse", "mae"], default="rmse",
+                        help="métrica do rank médio; mae acrescenta o sufixo _mae")
     args = parser.parse_args()
 
     patients = select_patients() if args.patients == "sweep" else all_patients()
-    tag = "" if args.patients == "sweep" else "_30p"
-    configs = build_sweep_configs()
+    tag = ("" if args.patients == "sweep" else "_30p") + ("" if args.grid == "v1" else f"_{args.grid}") \
+        + ("" if args.metric == "rmse" else f"_{args.metric}")
+    configs = build_sweep_configs(args.grid)
     size = dict(zip(patients["patient"], patients["n_imputed"]))
 
     if not args.summary_only:
@@ -185,7 +220,7 @@ def main():
         tasks.sort(key=lambda t: -size[t[1]])
         total = len(args.scenarios) * len(patients) * len(configs)
         print(
-            f"Features: {args.features} | {len(patients)} pacientes: {', '.join(patients['patient'])}\n"
+            f"Grade: {args.grid} | Features: {args.features} | {len(patients)} pacientes: {', '.join(patients['patient'])}\n"
             f"{len(configs)} configs × {len(patients)} pacientes × {len(args.scenarios)} cenários = {total} tarefas | "
             f"{total - len(tasks)} prontas | {len(tasks)} a rodar | workers={args.workers}",
             flush=True,
@@ -202,7 +237,7 @@ def main():
         print(f"\nTempo total: {(time.time() - t0) / 60:.1f} min", flush=True)
 
     for s in args.scenarios:
-        summarize(s, args.features, list(patients["patient"]), tag)
+        summarize(s, args.features, list(patients["patient"]), tag, {cid for _, cid, _ in configs}, args.metric)
 
 
 if __name__ == "__main__":

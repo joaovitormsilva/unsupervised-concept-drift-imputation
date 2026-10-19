@@ -28,6 +28,10 @@ RUN_DIRS = {
     "_mod": "3_minuto_do_dia_defaults",
     "_tuned_mod": "4_minuto_do_dia_ajustados",
     "_tuned_mod_30p": "5_minuto_do_dia_ajustados_30p",
+    "_tuned_mod_30p_v2": "6_minuto_do_dia_ajustados_30p_grade_orientador",
+    "_tuned_mod_30p_mae": "7_minuto_do_dia_ajustados_30p_mae",
+    "_tuned_mod_30p_v2_mae": "8_minuto_do_dia_ajustados_30p_grade_orientador_mae",
+    "_tuned_mod_30p_v3_mae": "9_minuto_do_dia_ph_threshold_alto_mae",
 }
 
 

@@ -57,8 +57,9 @@ SWEEP_RESULTS_DIR = os.path.join(os.path.dirname(__file__), "Parameters", "resul
 def tuned_params(scenario: str, features: str = "hm", sweep_set: str = "10p") -> dict[str, dict]:
     """Melhores parâmetros por detector no sweep (Parameters/run_sweep.py) para o cenário:
     menor rank médio de RMSE entre as configurações de cada detector."""
-    # sweep feito com a mesma entrada do imputador; sweep_set = 10 pacientes sorteados ou os 30
-    sfx = ("" if features == "hm" else f"_{features}") + ("" if sweep_set == "10p" else "_30p")
+    # sweep feito com a mesma entrada do imputador; sweep_set = 10p (sorteados), 30p (todos) ou
+    # 30p_v2 (todos, grade do orientador)
+    sfx = ("" if features == "hm" else f"_{features}") + ("" if sweep_set == "10p" else f"_{sweep_set}")
     ranking = pd.read_csv(os.path.join(SWEEP_RESULTS_DIR, f"sweep_ranking{sfx}_{scenario}.csv"))
     sweep = pd.read_csv(os.path.join(SWEEP_RESULTS_DIR, f"sweep{sfx}_{scenario}.csv"))
     best = {}
@@ -67,7 +68,8 @@ def tuned_params(scenario: str, features: str = "hm", sweep_set: str = "10p") ->
         config_id = cands.sort_values("rank_medio").iloc[0]["config_id"]
         row = sweep[sweep["config_id"] == config_id].iloc[0]
         params = {c[2:]: row[c] for c in sweep.columns if c.startswith("p_") and pd.notna(row[c])}
-        best[det] = {k: int(v) if k in ("window_size", "seed") else float(v) for k, v in params.items()}
+        ints = ("window_size", "stat_size", "seed", "min_window_length")
+        best[det] = {k: int(v) if k in ints else float(v) for k, v in params.items()}
     return best
 
 
@@ -190,7 +192,8 @@ def main():
     parser.add_argument("--fresh", action="store_true", help="apaga os checkpoints do cenário e recomeça do zero")
     parser.add_argument("--tuned", action="store_true", help="detectores com os melhores parâmetros do sweep (saída com sufixo _tuned)")
     parser.add_argument("--features", choices=list(FEATURE_SETS), default="hm", help="entrada do imputador; 'mod' adiciona sufixo _mod")
-    parser.add_argument("--sweep-set", choices=["10p", "30p"], default="10p", help="com --tuned: sweep de 10 ou dos 30 pacientes")
+    parser.add_argument("--sweep-set", choices=["10p", "30p", "30p_v2", "30p_mae", "30p_v2_mae"], default="10p",
+                        help="com --tuned: sweep de 10, dos 30, ou dos 30 com a grade do orientador; _mae = escolha por rank de MAE")
     args = parser.parse_args()
 
     patients_df = pd.read_csv(os.path.join(PREPARED_DIR, "patients.csv"))
@@ -200,8 +203,8 @@ def main():
         patient_ids = patient_ids[: int(args.patients)]
 
     suffix = ("_tuned" if args.tuned else "") + ("_mod" if args.features == "mod" else "")
-    if args.tuned and args.sweep_set == "30p":
-        suffix += "_30p"
+    if args.tuned and args.sweep_set != "10p":
+        suffix += f"_{args.sweep_set}"
     ckpt_dir = os.path.join(CHECKPOINT_DIR + suffix, args.scenario)
     if args.fresh and os.path.isdir(ckpt_dir):
         shutil.rmtree(ckpt_dir)
@@ -225,7 +228,9 @@ def main():
         if not os.path.exists(ckpt_path(pid)):
             return None
         got = dict(zip(*read_ckpt(pid)[["detector", "params"]].values.T))
-        return [m for m, p in expected.items() if got.get(m) != p]
+        # compara sem depender da ordem das chaves ("a=1;b=2" == "b=2;a=1")
+        same = lambda a, b: a is not None and sorted(a.split(";")) == sorted(b.split(";"))
+        return [m for m, p in expected.items() if not same(got.get(m), p)]
 
     pending = {}
     for p in patient_ids:

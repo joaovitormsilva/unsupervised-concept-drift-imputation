@@ -50,6 +50,41 @@ dele. Ao resolver, mover para "Resolvidas" com a data e a decisão.
   avaliados nos mesmos 30 pacientes: resultado otimista, registrar como
   limitação no texto.
 
+- **2026-10-11 — grade do orientador (v2):** KSWIN `window_size` ∈
+  {5k, 10k, 20k, 30k} × `stat_size` ∈ {200, 400, 800, 1000} × α ∈ {1e-5,
+  1e-4, 1e-3}; ADWIN `min_window_length` ∈ {10k, 15k, 20k, 30k, 50k} (δ
+  default); PH igual. Janelas na escala de dias (os detectores atuais disparam
+  a cada 1–2 h). 30 pacientes, minuto do dia, HT sem correção (decisão do
+  usuário). Saídas `_30p_v2`; rodada 6. Hipótese a checar nos resultados: com
+  janelas grandes KSWIN/ADWIN podem virar reset periódico (n_drifts ≈
+  pontos ÷ janela).
+  - **Resultado (2026-10-13, 776 min na VM):** hipótese confirmada. KSWIN
+    dispara toda vez que a janela enche (n_drifts ÷ (pontos/janela) ≈ 0,97–1,00,
+    α indiferente); ADWIN dispara a cada ~2×`min_window_length` (razão ≈ 0,4).
+    Com 5–22 resets por paciente, ADWIN e KSWIN ficaram piores que a HT sem
+    detector em todos os cenários (ex. S1 mediana RMSE: HT 20,9, ADWIN 30,7,
+    KSWIN 79,5); o melhor de cada grade é o maior valor (borda da grade).
+    PH inalterado. Rodada 6 em `Plots/6_minuto_do_dia_ajustados_30p_grade_orientador/`.
+
+- **2026-10-16 — PH com thresholds altos (v3):** o PH ajustado reseta a cada
+  ~46–68 pontos observados (Afonso: nesse regime seria mais simples imputar os
+  valores mais recentes). Grade: threshold ∈ {1k, 2k, 5k, 10k, 20k, 50k} ×
+  δ ∈ {0.005, 0.5, 2, 5} × `min_instances` ∈ {30, 1k, 5k, 10k} (96 configs).
+  30 pacientes, minuto do dia, HT sem correção, **rank médio por MAE**
+  (Afonso pediu foco só no MAE). Saídas `_30p_v3_mae`.
+  - **Resultado (2026-10-18, 1369 min na VM):** nenhuma config v3 chega perto
+    da HT sem detector nem do PH da v1. Melhor v3 = threshold=50000, δ=5
+    (~23 resets/paciente): MAE mediana 31,9 / 61,8 / 62,1 (S1/S2/S3) contra
+    HT 13,2 / 18,7 / 18,0 e PH v1 10,9 / 14,1 / 16,5. `min_instances` quase
+    não muda nada. Curva MAE × nº de resets: resets muito frequentes
+    (~8–13 mil, a cada ~50 pontos) e nenhum reset são bons; qualquer coisa
+    no meio (dezenas a milhares de resets) é ruim, pior entre ~500 e 2000.
+- **2026-10-16 — MAE como critério em todos os sweeps (decisão do usuário).**
+  Os sweeps de 30 pacientes (v1 e v2) foram re-ranqueados por MAE a partir dos
+  checkpoints (saídas `_30p_mae`, `_30p_v2_mae`). Muda só o S3: PH threshold
+  50 → 100 (v1 e v2) e KSWIN stat_size 400 → 200 (v2). Rodadas 7 e 8 em
+  `Plots/7_*` e `Plots/8_*`, CD-diagram só de MAE.
+
 ### 4. Ausência descartada no início de cada série
 - **Contexto:** o pipeline corta tudo antes do primeiro valor observado
   (`first_valid_index()`), o que descarta ~2% dos ausentes simulados. O
